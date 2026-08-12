@@ -1,5 +1,3 @@
-///this just a comment
-
 export interface Shop {
     id: number;
     shopName: string;
