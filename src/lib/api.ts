@@ -430,7 +430,7 @@ export const authAPI = {
 
   verifyOtp: async (username: string, otp: string): Promise<RetailLoginResponse> => {
     try {
-      const response = await api.post('/api/Authentication/VerifyRetailOtp', null, {
+      const response = await api.post('/api/Authentication/VerifyRetailBranchOtp', null, {
         params: { username, otp },
       });
       console.log('[authAPI.verifyOtp] Response:', JSON.stringify(response.data, null, 2));

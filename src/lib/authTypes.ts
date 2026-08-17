@@ -33,6 +33,7 @@ export interface RetailLoginResponse {
   message: string;
   token?: string;
   rShop_ID?: number;
+  shop_ID?: number;
   shopName?: string;
   username?: string;
   email?: string;

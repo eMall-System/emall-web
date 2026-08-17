@@ -103,7 +103,7 @@ export default function LoginPage() {
 
       if (response.statusCode === 200 && response.token) {
         const userData = {
-          id: response.rShop_ID || 0,
+          id: response.rShop_ID ?? response.shop_ID ?? 0,
           name: response.shopName || "",
           surname: "",
           email: response.email || "",
