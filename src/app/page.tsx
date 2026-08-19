@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import LoginPage from "@/components/auth/LoginPage";
 import ShopManagerDashboard from "@/components/shop/ShopManagerDashboard";
 import MallManagerDashboard from "@/components/mall/MallManagerDashboard";
-import RetailShopDashboard from "@/components/retail/RetailShopDashboard";
+import RetailShopDashboard from "@/components/retail/ShopManagerDashboard";
 import Loader from "@/components/ui/Loader";
 
 export default function Home() {

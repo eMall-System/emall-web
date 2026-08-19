@@ -780,6 +780,41 @@ export const authAPI = {
     }
   },
 
+  getRProductsByRShopID: async (rShopID: number): Promise<Product[]> => {
+    try {
+      const response = await api.get(`/api/Products/GetRProductsByRShopID/${rShopID}`);
+      console.log('[authAPI.getRProductsByRShopID] Response:', JSON.stringify(response.data, null, 2));
+      return response.data.map((p: any) => ({
+        id: p.dto.rProd_ID,
+        prod_Name: p.dto.prod_Name,
+        prod_Desc: p.dto.prod_Desc,
+        prod_Categ: p.dto.prod_Categ === 'Health & Pharmarcy' ? 'Health & Pharmacy' : p.dto.prod_Categ, // Fix typo
+        prod_Subcateg: p.dto.prod_Subcateg,
+        price: p.dto.price,
+        prod_Weight: p.dto.prod_Weight,
+        quantity: 0, // Retail-level products aren't stock-tracked; quantity lives per-branch instead
+        shopId: rShopID,
+        imageUrl: p.image ? `data:image/jpeg;base64,${p.image}` : p.dto.prod_Image,
+        onSaleOffer: undefined,
+        type: p.dto.prod_Categ === 'Health & Pharmarcy' ? 'Pharmacy' : p.dto.prod_Categ || 'General',
+        variants: undefined, // Retail product variants use a different shape (color-only); not wired up yet
+      }));
+    } catch (error: unknown) {
+      console.error('[authAPI.getRProductsByRShopID] Error:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        code: error instanceof AxiosError ? error.code : undefined,
+        response: error instanceof AxiosError && error.response ? {
+          status: error.response.status,
+          data: error.response.data,
+        } : undefined,
+      });
+      if (error instanceof AxiosError && error.response) {
+        throw new Error(error.response.data.message || 'Failed to fetch products');
+      }
+      throw new Error(error instanceof Error ? error.message : 'An unexpected error occurred');
+    }
+  },
+
   uploadProduct: async (formData: FormData): Promise<AuthResponse> => {
     try {
       const response = await api.post('/api/Products/UploadProductInfo', formData, {
