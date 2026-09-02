@@ -86,3 +86,51 @@ export interface Product {
   type: string;
   variants?: { id: number; size: string; color: string; quantity: number }[];
 }
+
+export interface RetailProductVariant {
+  id?: number;
+  colorName: string;
+  colorPicture?: string;
+  sizes: string[];
+}
+
+export interface RetailProduct {
+  id: number;
+  prod_Name: string;
+  prod_Desc: string;
+  prod_Categ: string;
+  prod_Subcateg: string;
+  price: number;
+  prod_Weight: string;
+  hasVariant: boolean;
+  discPerc?: number;
+  discAmount?: number;
+  shopId: number;
+  imageUrl?: string;
+  variants?: RetailProductVariant[];
+}
+
+export interface CategoryWithSubs {
+  id: number;
+  catName: string;
+  subs: { catId: number; subcatName: string }[];
+}
+
+export interface RetailShopProfile {
+  rShopId: number;
+  shopName: string;
+  username: string;
+  email: string;
+  tellphone: string;
+  shopType: string;
+  imageBase64?: string;
+}
+
+export interface BranchShop {
+  id: number;
+  shopName: string;
+  email: string;
+  tellphone: string;
+  regStatus: string;
+  imageBase64?: string;
+}

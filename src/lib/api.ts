@@ -338,7 +338,50 @@
 
 import axios, { AxiosError } from 'axios';
 import axiosRetry from 'axios-retry';
-import { AuthResponse, RegisterManagerData, Shop, Mall, UserResponse, Product, RetailLoginResponse } from './authTypes';
+import { AuthResponse, RegisterManagerData, Shop, Mall, UserResponse, Product, RetailLoginResponse, RetailProduct, CategoryWithSubs, RetailShopProfile, BranchShop } from './authTypes';
+
+// Friendlier labels for backend field names, used when turning ASP.NET Core's
+// validation errors into readable messages (see extractErrorMessage below).
+const FIELD_LABELS: Record<string, string> = {
+  Prod_Name: 'Product Name',
+  Prod_Desc: 'Description',
+  Prod_Categ: 'Category',
+  Prod_Subcateg: 'Sub-Category',
+  Prod_Weight: 'Weight',
+  Price: 'Price',
+  DiscPerc: 'Discount %',
+  DiscAmount: 'Discount Amount',
+  RShopId: 'Shop',
+  image: 'Product Image',
+};
+
+// Turns a failed request into a message worth showing the user directly,
+// instead of a generic "failed" toast. Handles the two shapes the backend
+// actually returns - ASP.NET Core's automatic field validation errors
+// ({ errors: { Field: [msgs] } }) and the app's own ApiResponse ({ message }) -
+// plus a plain-string body, falling back to the given default otherwise.
+// Only ever surfaces messages the backend itself already intended as
+// user-facing (field validation text), never stack traces or internals.
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AxiosError && error.response) {
+    const data = error.response.data;
+    if (data && typeof data === 'object' && data.errors) {
+      const messages = Object.entries(data.errors as Record<string, string[]>).map(
+        ([field, msgs]) => `${FIELD_LABELS[field] || field}: ${msgs.join(' ')}`
+      );
+      if (messages.length > 0) {
+        return messages.join(' ');
+      }
+    }
+    if (data && typeof data === 'object' && typeof data.message === 'string' && data.message) {
+      return data.message;
+    }
+    if (typeof data === 'string' && data.trim()) {
+      return data;
+    }
+  }
+  return fallback;
+}
 
 const api = axios.create({
   baseURL: 'https://emall-h0cja4cpepgkhpcc.southafricanorth-01.azurewebsites.net',
@@ -553,13 +596,31 @@ export const authAPI = {
 
   forgotPassword: async (username: string): Promise<AuthResponse> => {
     try {
-      const response = await api.post('/api/Authentication/ForgotPassword', { username });
+      const response = await api.post('/api/Authentication/ForgotRetailBranchPass', null, {
+        params: { username },
+      });
       console.log('[authAPI.forgotPassword] Response:', JSON.stringify(response.data, null, 2));
       return response.data;
     } catch (error: unknown) {
       console.error('[authAPI.forgotPassword] Error:', error);
       if (error instanceof AxiosError && error.response) {
         throw new Error(error.response.data.message || 'Failed to request password reset');
+      }
+      throw new Error('An unexpected error occurred');
+    }
+  },
+
+  resetForgottenPassword: async (username: string, otp: string, newPass: string): Promise<AuthResponse> => {
+    try {
+      const response = await api.put('/api/Authentication/SaveNewRetailBranchPass', null, {
+        params: { username, otp, newPass },
+      });
+      console.log('[authAPI.resetForgottenPassword] Response:', JSON.stringify(response.data, null, 2));
+      return response.data;
+    } catch (error: unknown) {
+      console.error('[authAPI.resetForgottenPassword] Error:', error);
+      if (error instanceof AxiosError && error.response) {
+        throw new Error(error.response.data.message || 'Failed to reset password');
       }
       throw new Error('An unexpected error occurred');
     }
@@ -706,6 +767,66 @@ export const authAPI = {
     }
   },
 
+  getBranchesByRShopID: async (rShopId: number): Promise<BranchShop[]> => {
+    try {
+      const response = await api.get('/api/Shop/GetBranchesByRShopID', { params: { id: rShopId } });
+      console.log('[authAPI.getBranchesByRShopID] Response:', JSON.stringify(response.data, null, 2));
+      return (response.data as any[]).map((b) => ({
+        id: b.dto.shopId,
+        shopName: b.dto.shopName,
+        email: b.dto.email,
+        tellphone: b.dto.tellphone,
+        regStatus: b.dto.regStatus,
+        imageBase64: b.image,
+      }));
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch branches'));
+    }
+  },
+
+  approveBranch: async (branchId: number): Promise<AuthResponse> => {
+    try {
+      const response = await api.put('/api/Authentication/ApproveRetailBranchShop', null, {
+        params: { b: branchId },
+      });
+      console.log('[authAPI.approveBranch] Response:', JSON.stringify(response.data, null, 2));
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to approve branch'));
+    }
+  },
+
+  rejectBranch: async (branchId: number, reason?: string): Promise<AuthResponse> => {
+    try {
+      const response = await api.put('/api/Authentication/RejectRetailBranchShop', null, {
+        params: { b: branchId, reason },
+      });
+      console.log('[authAPI.rejectBranch] Response:', JSON.stringify(response.data, null, 2));
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to reject branch'));
+    }
+  },
+
+  getRetailShopById: async (id: number): Promise<RetailShopProfile> => {
+    try {
+      const response = await api.get('/api/Shop/GetRetailShopById', { params: { id } });
+      console.log('[authAPI.getRetailShopById] Response:', JSON.stringify(response.data, null, 2));
+      const dto = response.data.dto;
+      return {
+        rShopId: dto.rShop_ID ?? dto.rshopId ?? id,
+        shopName: dto.shopName || '',
+        username: dto.username || '',
+        email: dto.email || '',
+        tellphone: dto.tellphone || '',
+        shopType: dto.shopType || '',
+        imageBase64: response.data.image,
+      };
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch shop profile'));
+    }
+  },
+
   getShopByID: async (id: number): Promise<{ dto: Shop; imageBase64?: string }> => {
     try {
       const response = await api.get(`/api/Shop/GetShopByID/${id}`);
@@ -780,7 +901,7 @@ export const authAPI = {
     }
   },
 
-  getRProductsByRShopID: async (rShopID: number): Promise<Product[]> => {
+  getRProductsByRShopID: async (rShopID: number): Promise<RetailProduct[]> => {
     try {
       const response = await api.get(`/api/Products/GetRProductsByRShopID/${rShopID}`);
       console.log('[authAPI.getRProductsByRShopID] Response:', JSON.stringify(response.data, null, 2));
@@ -792,12 +913,19 @@ export const authAPI = {
         prod_Subcateg: p.dto.prod_Subcateg,
         price: p.dto.price,
         prod_Weight: p.dto.prod_Weight,
-        quantity: 0, // Retail-level products aren't stock-tracked; quantity lives per-branch instead
+        hasVariant: p.dto.hasVariant ?? false,
+        discPerc: p.dto.discPerc ?? undefined,
+        discAmount: p.dto.discAmount ?? undefined,
         shopId: rShopID,
         imageUrl: p.image ? `data:image/jpeg;base64,${p.image}` : p.dto.prod_Image,
-        onSaleOffer: undefined,
-        type: p.dto.prod_Categ === 'Health & Pharmarcy' ? 'Pharmacy' : p.dto.prod_Categ || 'General',
-        variants: undefined, // Retail product variants use a different shape (color-only); not wired up yet
+        variants: Array.isArray(p.dto.variants)
+          ? p.dto.variants.map((v: any) => ({
+              id: v.id ?? undefined,
+              colorName: v.colorName,
+              colorPicture: v.colorPicture ? `data:image/jpeg;base64,${v.colorPicture}` : undefined,
+              sizes: Array.isArray(v.sizes) ? v.sizes : [],
+            }))
+          : undefined,
       }));
     } catch (error: unknown) {
       console.error('[authAPI.getRProductsByRShopID] Error:', {
@@ -808,10 +936,73 @@ export const authAPI = {
           data: error.response.data,
         } : undefined,
       });
-      if (error instanceof AxiosError && error.response) {
-        throw new Error(error.response.data.message || 'Failed to fetch products');
-      }
-      throw new Error(error instanceof Error ? error.message : 'An unexpected error occurred');
+      throw new Error(extractErrorMessage(error, 'Failed to fetch products'));
+    }
+  },
+
+  getCategoriesWithSubs: async (): Promise<CategoryWithSubs[]> => {
+    try {
+      const response = await api.get('/api/Products/GetAllCatandSubs');
+      console.log('[authAPI.getCategoriesWithSubs] Response:', JSON.stringify(response.data, null, 2));
+      return response.data.map((c: any) => ({
+        id: c.id,
+        catName: c.catName,
+        subs: Array.isArray(c.subs)
+          ? c.subs.map((s: any) => ({ catId: s.catId, subcatName: s.subcatName }))
+          : [],
+      }));
+    } catch (error: unknown) {
+      console.error('[authAPI.getCategoriesWithSubs] Error:', error);
+      throw new Error(extractErrorMessage(error, 'Failed to fetch categories'));
+    }
+  },
+
+  uploadRProduct: async (formData: FormData): Promise<AuthResponse> => {
+    try {
+      const response = await api.post('/api/Products/UploadRProductInfo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      console.log('[authAPI.uploadRProduct] Response:', JSON.stringify(response.data, null, 2));
+      return {
+        statusCode: response.data.statusCode || 200,
+        message: response.data.message || 'Product uploaded successfully',
+        data: response.data,
+      };
+    } catch (error: unknown) {
+      console.error('[authAPI.uploadRProduct] Error:', error);
+      throw new Error(extractErrorMessage(error, 'Failed to upload product'));
+    }
+  },
+
+  deleteRProduct: async (id: number): Promise<AuthResponse> => {
+    try {
+      const response = await api.delete(`/api/Products/DeleteRProduct/${id}`);
+      console.log('[authAPI.deleteRProduct] Response:', JSON.stringify(response.data, null, 2));
+      return {
+        statusCode: response.data.statusCode || 200,
+        message: response.data.message || 'Product deleted successfully',
+        data: response.data,
+      };
+    } catch (error: unknown) {
+      console.error('[authAPI.deleteRProduct] Error:', error);
+      throw new Error(extractErrorMessage(error, 'Failed to delete product'));
+    }
+  },
+
+  editRProduct: async (id: number, formData: FormData): Promise<AuthResponse> => {
+    try {
+      const response = await api.put(`/api/Products/UpdateRProductInfo/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      console.log('[authAPI.editRProduct] Response:', JSON.stringify(response.data, null, 2));
+      return {
+        statusCode: response.data.statusCode || 200,
+        message: response.data.message || 'Product updated successfully',
+        data: response.data,
+      };
+    } catch (error: unknown) {
+      console.error('[authAPI.editRProduct] Error:', error);
+      throw new Error(extractErrorMessage(error, 'Failed to update product'));
     }
   },
 

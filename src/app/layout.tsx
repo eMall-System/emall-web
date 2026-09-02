@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
+import StyledComponentsRegistry from "@/lib/registry";
 import "./globals.css";
 
 
@@ -20,10 +21,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} antialiased`}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <StyledComponentsRegistry>
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </StyledComponentsRegistry>
       </body>
     </html>
   );

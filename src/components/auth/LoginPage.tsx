@@ -43,13 +43,27 @@ const forgotPasswordSchema = z.object({
   username: z.string().min(1, "Username is required"),
 });
 
+const resetPasswordSchema = z.object({
+  otp: z.string().length(6, "Enter the 6-digit code"),
+  newPass: z
+    .string()
+    .min(8, "New password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+      "Password must include uppercase, lowercase, number, and special character",
+    ),
+});
+
 type LoginFormData = z.infer<typeof loginSchema>;
 type OtpFormData = z.infer<typeof otpSchema>;
 type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"request" | "reset">("request");
+  const [forgotUsername, setForgotUsername] = useState("");
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [pendingUsername, setPendingUsername] = useState("");
   const [otpAttemptsLeft, setOtpAttemptsLeft] = useState(3);
@@ -75,6 +89,14 @@ export default function LoginPage() {
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
       username: "",
+    },
+  });
+
+  const resetPasswordForm = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: {
+      otp: "",
+      newPass: "",
     },
   });
 
@@ -145,15 +167,45 @@ export default function LoginPage() {
     otpForm.reset();
   };
 
+  const closeForgotPasswordDialog = () => {
+    setIsForgotPasswordOpen(false);
+    setForgotStep("request");
+    setForgotUsername("");
+    forgotPasswordForm.reset();
+    resetPasswordForm.reset();
+  };
+
   const handleForgotPassword = async (data: ForgotPasswordFormData) => {
     try {
-      await authAPI.forgotPassword(data.username);
-      toast.info("Password reset request submitted. Check your email.");
-      setIsForgotPasswordOpen(false);
-      forgotPasswordForm.reset();
+      const response = await authAPI.forgotPassword(data.username);
+      setForgotUsername(data.username);
+      resetPasswordForm.reset();
+      setForgotStep("reset");
+      toast.info(response.message || "OTP sent to your registered email.");
     } catch (error: any) {
       console.error("Forgot password error:", error);
       toast.error(error.message || "Failed to submit request. Please try again.");
+    }
+  };
+
+  const handleResetPassword = async (data: ResetPasswordFormData) => {
+    try {
+      const response = await authAPI.resetForgottenPassword(forgotUsername, data.otp, data.newPass);
+
+      if (response.statusCode === 200) {
+        toast.success(response.message || "Password successfully reset. Please log in.");
+        closeForgotPasswordDialog();
+      } else if (response.statusCode === 429) {
+        toast.error(response.message || "Too many incorrect attempts. Please request a new OTP.");
+        setForgotStep("request");
+        resetPasswordForm.reset();
+      } else {
+        toast.error(response.message || "Incorrect OTP.");
+        resetPasswordForm.setValue("otp", "");
+      }
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      toast.error(error.message || "Failed to reset password.");
     }
   };
 
@@ -317,54 +369,123 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+        <Dialog
+          open={isForgotPasswordOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeForgotPasswordDialog();
+            } else {
+              setIsForgotPasswordOpen(true);
+            }
+          }}
+        >
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Reset Password</DialogTitle>
-              <DialogDescription>
-                Enter your username to receive a password reset link.
-              </DialogDescription>
-            </DialogHeader>
-            <form
-              onSubmit={forgotPasswordForm.handleSubmit(handleForgotPassword)}
-              className="space-y-4"
-            >
-              <div>
-                <Label htmlFor="forgot-username">Username</Label>
-                <Input
-                  id="forgot-username"
-                  type="text"
-                  placeholder="Enter your username"
-                  {...forgotPasswordForm.register("username")}
-                  aria-invalid={!!forgotPasswordForm.formState.errors.username}
-                />
-                {forgotPasswordForm.formState.errors.username?.message && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {forgotPasswordForm.formState.errors.username.message}
-                  </p>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsForgotPasswordOpen(false);
-                    forgotPasswordForm.reset();
-                  }}
+            {forgotStep === "request" ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Reset Password</DialogTitle>
+                  <DialogDescription>
+                    Enter your username to receive a one-time code by email.
+                  </DialogDescription>
+                </DialogHeader>
+                <form
+                  onSubmit={forgotPasswordForm.handleSubmit(handleForgotPassword)}
+                  className="space-y-4"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={forgotPasswordForm.formState.isSubmitting}
+                  <div>
+                    <Label htmlFor="forgot-username">Username</Label>
+                    <Input
+                      id="forgot-username"
+                      type="text"
+                      placeholder="Enter your username"
+                      {...forgotPasswordForm.register("username")}
+                      aria-invalid={!!forgotPasswordForm.formState.errors.username}
+                    />
+                    {forgotPasswordForm.formState.errors.username?.message && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {forgotPasswordForm.formState.errors.username.message}
+                      </p>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={closeForgotPasswordDialog}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={forgotPasswordForm.formState.isSubmitting}>
+                      {forgotPasswordForm.formState.isSubmitting
+                        ? "Sending..."
+                        : "Send code"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Enter Code &amp; New Password</DialogTitle>
+                  <DialogDescription>
+                    We sent a 6-digit code to the email on file for {forgotUsername}. Enter it below along with your new password.
+                  </DialogDescription>
+                </DialogHeader>
+                <form
+                  onSubmit={resetPasswordForm.handleSubmit(handleResetPassword)}
+                  className="space-y-4"
                 >
-                  {forgotPasswordForm.formState.isSubmitting
-                    ? "Submitting..."
-                    : "Submit"}
-                </Button>
-              </DialogFooter>
-            </form>
+                  <div>
+                    <Label htmlFor="reset-otp">One-Time Code</Label>
+                    <Input
+                      id="reset-otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="123456"
+                      {...resetPasswordForm.register("otp")}
+                      aria-invalid={!!resetPasswordForm.formState.errors.otp}
+                    />
+                    {resetPasswordForm.formState.errors.otp?.message && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {resetPasswordForm.formState.errors.otp.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="reset-new-pass">New Password</Label>
+                    <Input
+                      id="reset-new-pass"
+                      type="password"
+                      placeholder="Enter new password"
+                      {...resetPasswordForm.register("newPass")}
+                      aria-invalid={!!resetPasswordForm.formState.errors.newPass}
+                    />
+                    {resetPasswordForm.formState.errors.newPass?.message && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {resetPasswordForm.formState.errors.newPass.message}
+                      </p>
+                    )}
+                  </div>
+                  <DialogFooter className="flex-col sm:flex-row gap-2">
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="text-sm text-gray-500 hover:text-gray-700 sm:mr-auto"
+                      onClick={() => setForgotStep("request")}
+                    >
+                      Didn&apos;t get a code? Resend
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" onClick={closeForgotPasswordDialog}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={resetPasswordForm.formState.isSubmitting}>
+                        {resetPasswordForm.formState.isSubmitting
+                          ? "Resetting..."
+                          : "Reset Password"}
+                      </Button>
+                    </div>
+                  </DialogFooter>
+                </form>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       </motion.div>

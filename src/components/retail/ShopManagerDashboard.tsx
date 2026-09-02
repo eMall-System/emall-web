@@ -129,20 +129,22 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Package, Users, User } from "lucide-react";
+import { LayoutDashboard, Package, Store, BarChart3, User } from "lucide-react";
 import ProductsSection from "./ProductsSection";
 import PackagerSection from "./PackagerSection";
 import ProfileSection from "./ProfileSection";
 
-type TabType = "products" | "packager" | "profile";
+type TabType = "dashboard" | "products" | "packager" | "reports" | "profile";
 
 export default function ShopManagerDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("products");
 
   const tabs = [
+    { id: "dashboard" as TabType, label: "Dashboard", icon: LayoutDashboard },
     { id: "products" as TabType, label: "Products", icon: Package },
-    { id: "packager" as TabType, label: "Packager", icon: Users },
+    { id: "packager" as TabType, label: "Branches", icon: Store },
+    { id: "reports" as TabType, label: "Reports", icon: BarChart3 },
     { id: "profile" as TabType, label: "Profile", icon: User },
   ];
 
@@ -211,8 +213,10 @@ export default function ShopManagerDashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        {activeTab === "dashboard" && null}
         {activeTab === "products" && <ProductsSection />}
         {activeTab === "packager" && <PackagerSection />}
+        {activeTab === "reports" && null}
         {activeTab === "profile" && <ProfileSection />}
       </main>
     </div>
