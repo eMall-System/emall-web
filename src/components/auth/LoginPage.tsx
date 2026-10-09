@@ -43,16 +43,22 @@ const forgotPasswordSchema = z.object({
   username: z.string().min(1, "Username is required"),
 });
 
-const resetPasswordSchema = z.object({
-  otp: z.string().length(6, "Enter the 6-digit code"),
-  newPass: z
-    .string()
-    .min(8, "New password must be at least 8 characters")
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-      "Password must include uppercase, lowercase, number, and special character",
-    ),
-});
+const resetPasswordSchema = z
+  .object({
+    otp: z.string().length(6, "Enter the 6-digit code"),
+    newPass: z
+      .string()
+      .min(8, "New password must be at least 8 characters")
+      .regex(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+        "Password must include uppercase, lowercase, number, and special character",
+      ),
+    confirmPass: z.string().min(1, "Please confirm your new password"),
+  })
+  .refine((data) => data.newPass === data.confirmPass, {
+    message: "Passwords do not match",
+    path: ["confirmPass"],
+  });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 type OtpFormData = z.infer<typeof otpSchema>;
@@ -97,6 +103,7 @@ export default function LoginPage() {
     defaultValues: {
       otp: "",
       newPass: "",
+      confirmPass: "",
     },
   });
 
@@ -460,6 +467,21 @@ export default function LoginPage() {
                     {resetPasswordForm.formState.errors.newPass?.message && (
                       <p className="text-red-500 text-xs mt-1">
                         {resetPasswordForm.formState.errors.newPass.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="reset-confirm-pass">Confirm Password</Label>
+                    <Input
+                      id="reset-confirm-pass"
+                      type="password"
+                      placeholder="Re-enter new password"
+                      {...resetPasswordForm.register("confirmPass")}
+                      aria-invalid={!!resetPasswordForm.formState.errors.confirmPass}
+                    />
+                    {resetPasswordForm.formState.errors.confirmPass?.message && (
+                      <p className="text-red-500 text-xs mt-1">
+                        {resetPasswordForm.formState.errors.confirmPass.message}
                       </p>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
 import { RetailProduct, CategoryWithSubs } from '@/lib/authTypes';
@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Search, Package, ShoppingBag, Plus, RefreshCw, X, Trash2 } from 'lucide-react';
+import { Search, Package, ShoppingBag, Plus, RefreshCw, X, Trash2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -32,8 +32,6 @@ interface VariantDraft {
   existingImageUrl?: string;
   sizes: string[];
 }
-
-const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
 function computeSale(price: number, discPerc?: number, discAmount?: number) {
   if (discPerc) {
@@ -53,6 +51,9 @@ export default function ProductsSection() {
   const [products, setProducts] = useState<RetailProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All products');
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [categoryQuery, setCategoryQuery] = useState('');
+  const categoryMenuRef = useRef<HTMLDivElement>(null);
   const [isProductFormOpen, setIsProductFormOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,13 +108,6 @@ export default function ProductsSection() {
     sizes: [],
   });
 
-  const toggleVariantDraftSize = (size: string) => {
-    setVariantDraft((prev) => ({
-      ...prev,
-      sizes: prev.sizes.includes(size) ? prev.sizes.filter((s) => s !== size) : [...prev.sizes, size],
-    }));
-  };
-
   const resetVariantDraft = () => {
     setVariantDraft({ colorName: '', imageFile: null, sizes: [] });
   };
@@ -142,10 +136,21 @@ export default function ProductsSection() {
     resetNewProduct();
   };
 
+  const refreshCategories = async () => {
+    try {
+      const cats = await authAPI.getCategoriesWithSubs();
+      setCategoriesWithSubs(cats);
+    } catch (catError) {
+      console.error('[ProductsSection] Failed to refresh categories:', catError);
+      // Non-fatal - the form can still be used with whichever categories were already loaded.
+    }
+  };
+
   const openAddProduct = () => {
     setEditingProductId(null);
     resetNewProduct();
     setIsProductFormOpen(true);
+    refreshCategories();
   };
 
   const openEditProduct = (product: RetailProduct) => {
@@ -173,6 +178,7 @@ export default function ProductsSection() {
     });
     resetVariantDraft();
     setIsProductFormOpen(true);
+    refreshCategories();
   };
 
   useEffect(() => {
@@ -193,14 +199,7 @@ export default function ProductsSection() {
         const rShopId = user.id;
         setShopId(rShopId);
 
-        try {
-          const cats = await authAPI.getCategoriesWithSubs();
-          setCategoriesWithSubs(cats);
-        } catch (catError) {
-          console.error('[ProductsSection] Failed to fetch categories:', catError);
-          // Non-fatal - the product list can still load without categories.
-        }
-
+        await refreshCategories();
         await fetchProducts(rShopId);
       } catch (error: any) {
         console.error('[ProductsSection] Failed to fetch data:', error);
@@ -213,6 +212,17 @@ export default function ProductsSection() {
 
     fetchData();
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (!isCategoryMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryMenuRef.current && !categoryMenuRef.current.contains(e.target as Node)) {
+        setIsCategoryMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isCategoryMenuOpen]);
 
   const fetchProducts = async (rShopId: number) => {
     setIsFetching(true);
@@ -660,18 +670,6 @@ export default function ProductsSection() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="weight" className="text-sm">Weight / Size (optional)</Label>
-                        <Input
-                          id="weight"
-                          value={newProduct.weight}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setNewProduct({ ...newProduct, weight: e.target.value })
-                          }
-                          placeholder="e.g., 500g, Size 9, Medium"
-                          className="border-gray-300"
-                        />
-                      </div>
-                      <div>
                         <Label htmlFor="discPerc" className="text-sm">Discount %</Label>
                         <Input
                           id="discPerc"
@@ -774,25 +772,6 @@ export default function ProductsSection() {
                             {variantDraft.key ? 'Update Variant' : 'Add Variant'}
                           </Button>
                         </div>
-                        <div>
-                          <Label className="text-sm">Sizes available in this color</Label>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {AVAILABLE_SIZES.map((size) => (
-                              <button
-                                key={size}
-                                type="button"
-                                onClick={() => toggleVariantDraftSize(size)}
-                                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                                  variantDraft.sizes.includes(size)
-                                    ? 'bg-green-600 text-white border-green-600'
-                                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                {size}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
                         {newProduct.variants.length > 0 && (
                           <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                             {newProduct.variants.map((v) => (
@@ -871,22 +850,57 @@ export default function ProductsSection() {
           </div>
         </div>
 
-        {/* Category Tabs */}
-        <div className="flex flex-wrap gap-2 bg-white rounded-lg p-1 w-full shadow-sm">
-          {categories.map((category) => (
-            <Button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              variant={selectedCategory === category ? 'default' : 'ghost'}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                selectedCategory === category
-                  ? 'bg-green-100 text-green-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              {category}
-            </Button>
-          ))}
+        {/* Category Filter */}
+        <div className="relative w-full sm:w-72" ref={categoryMenuRef}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsCategoryMenuOpen((open) => !open)}
+            className="w-full justify-between border-gray-300 bg-white text-gray-700 font-normal shadow-sm"
+          >
+            <span className="truncate">{selectedCategory}</span>
+            <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+          </Button>
+          {isCategoryMenuOpen && (
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+              <div className="relative p-2 border-b border-gray-100">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  autoFocus
+                  placeholder="Search categories..."
+                  value={categoryQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCategoryQuery(e.target.value)}
+                  className="pl-8 h-9 border-gray-300"
+                />
+              </div>
+              <div className="max-h-60 overflow-y-auto py-1">
+                {categories.filter((c) => c.toLowerCase().includes(categoryQuery.toLowerCase())).length === 0 ? (
+                  <p className="px-3 py-2 text-sm text-gray-500">No matching categories.</p>
+                ) : (
+                  categories
+                    .filter((c) => c.toLowerCase().includes(categoryQuery.toLowerCase()))
+                    .map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(category);
+                          setIsCategoryMenuOpen(false);
+                          setCategoryQuery('');
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          selectedCategory === category
+                            ? 'bg-green-50 text-green-700 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Error State */}
@@ -1021,18 +1035,6 @@ export default function ProductsSection() {
                 </div>
                 {viewingProduct.hasVariant && viewingProduct.variants && viewingProduct.variants.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setViewingVariantIndex(null)}
-                      className={`w-12 h-12 rounded-lg overflow-hidden border-2 ${
-                        viewingVariantIndex === null ? 'border-green-600' : 'border-transparent'
-                      }`}
-                      title="Default image"
-                    >
-                      {viewingProduct.imageUrl && (
-                        <img src={viewingProduct.imageUrl} alt="Default" className="w-full h-full object-cover" />
-                      )}
-                    </button>
                     {viewingProduct.variants.map((v, idx) => (
                       <button
                         type="button"
