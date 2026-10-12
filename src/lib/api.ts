@@ -353,6 +353,9 @@ const FIELD_LABELS: Record<string, string> = {
   DiscAmount: 'Discount Amount',
   RShopId: 'Shop',
   image: 'Product Image',
+  ShopName: 'Shop Name',
+  Email: 'Email',
+  Tellphone: 'Phone Number',
 };
 
 // Turns a failed request into a message worth showing the user directly,
@@ -384,7 +387,7 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 }
 
 const api = axios.create({
-  baseURL: 'https://emall-h0cja4cpepgkhpcc.southafricanorth-01.azurewebsites.net',
+  baseURL: 'http://localhost:5150',
   timeout: 30000, // Increased timeout to 30 seconds
 });
 
@@ -730,6 +733,26 @@ export const authAPI = {
     }
   },
 
+  getMalls: async (): Promise<Mall[]> => {
+    try {
+      const response = await api.get('/api/Mall/GetMalls');
+      console.log('[authAPI.getMalls] Response:', JSON.stringify(response.data, null, 2));
+      return (response.data as any[]).map((m) => ({
+        mallID: m.dto.mallID,
+        mallName: m.dto.mallName,
+        mallAddr: m.dto.mallAddr,
+        mallContacts: m.dto.mallContacts,
+        mallImage: m.dto.mallImage,
+        imageBase64: m.image,
+      }));
+    } catch (error: unknown) {
+      if (error instanceof AxiosError && error.response?.status === 404) {
+        return [];
+      }
+      throw new Error(extractErrorMessage(error, 'Failed to fetch malls'));
+    }
+  },
+
   getShopManagers: async (mallID: number): Promise<{ userID: number; roleID: number; uName: string; uSurname: string; uGender: string; uPhone: string; uEmail: string; uType: string }[]> => {
     try {
       const response = await api.get(`/api/UserManagement/GetShopManagers?mallID=${mallID}`);
@@ -777,6 +800,8 @@ export const authAPI = {
         email: b.dto.email,
         tellphone: b.dto.tellphone,
         regStatus: b.dto.regStatus,
+        mallId: b.dto.mallID,
+        mallName: b.dto.mallName,
         imageBase64: b.image,
       }));
     } catch (error: unknown) {
@@ -805,6 +830,18 @@ export const authAPI = {
       return response.data;
     } catch (error: unknown) {
       throw new Error(extractErrorMessage(error, 'Failed to reject branch'));
+    }
+  },
+
+  registerBranch: async (formData: FormData): Promise<AuthResponse> => {
+    try {
+      const response = await api.post('/api/Authentication/RegisterBranchShop', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      console.log('[authAPI.registerBranch] Response:', JSON.stringify(response.data, null, 2));
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to register branch'));
     }
   },
 

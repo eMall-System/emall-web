@@ -132,5 +132,7 @@ export interface BranchShop {
   email: string;
   tellphone: string;
   regStatus: string;
+  mallId: number;
+  mallName: string;
   imageBase64?: string;
 }
