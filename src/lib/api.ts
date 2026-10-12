@@ -387,7 +387,7 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 }
 
 const api = axios.create({
-  baseURL: 'http://localhost:5150',
+  baseURL: 'https://emall-h0cja4cpepgkhpcc.southafricanorth-01.azurewebsites.net',
   timeout: 30000, // Increased timeout to 30 seconds
 });
 
