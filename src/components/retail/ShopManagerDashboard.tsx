@@ -129,16 +129,19 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LayoutDashboard, Package, Store, BarChart3, User } from "lucide-react";
+import { LayoutDashboard, Package, Store, BarChart3, User, Menu, X } from "lucide-react";
 import ProductsSection from "./ProductsSection";
 import PackagerSection from "./PackagerSection";
 import ProfileSection from "./ProfileSection";
+import DashboardSection from "./DashboardSection";
+import ReportsSection from "./ReportsSection";
 
 type TabType = "dashboard" | "products" | "packager" | "reports" | "profile";
 
 export default function ShopManagerDashboard() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>("products");
+  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const tabs = [
     { id: "dashboard" as TabType, label: "Dashboard", icon: LayoutDashboard },
@@ -163,12 +166,12 @@ export default function ShopManagerDashboard() {
               <img
                 src="/logo.png"
                 alt="eMALL Logo"
-                className="h-60 w-auto cursor-pointer -ml-16"
+                className="h-10 sm:h-14 md:h-60 w-auto cursor-pointer -ml-2 sm:-ml-4 md:-ml-16"
               />
             </div>
 
-            {/* Navigation Tabs */}
-            <div className="flex space-x-8 justify-start pl-80">
+            {/* Navigation Tabs (desktop) */}
+            <div className="hidden md:flex md:space-x-8 md:justify-start md:pl-80">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
@@ -190,33 +193,79 @@ export default function ShopManagerDashboard() {
               })}
             </div>
 
-            {/* Manager Avatar with Tooltip and Border */}
-            <div className="relative group">
-              <Button
-                variant="ghost"
-                className="relative h-8 w-8 rounded-full"
-                title={`${user.name} ${user.surname}`}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Mobile menu toggle */}
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen((open) => !open)}
+                className="md:hidden inline-flex items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 transition-colors"
+                aria-label="Toggle navigation menu"
+                aria-expanded={isMobileMenuOpen}
               >
-                <Avatar className="h-8 w-8 border-2 border-gray-300 rounded-full">
-                  <AvatarFallback className="bg-green-100 text-green-600 border-2 border-gray-300 rounded-full">
-                    {user.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-              <span className="absolute right-0 top-10 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                {user.name} {user.surname}
-              </span>
+                {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+
+              {/* Manager Avatar with Tooltip and Border */}
+              <div className="relative group">
+                <Button
+                  variant="ghost"
+                  className="relative h-8 w-8 rounded-full"
+                  title={`${user.name} ${user.surname}`}
+                >
+                  <Avatar className="h-8 w-8 border-2 border-gray-300 rounded-full">
+                    <AvatarFallback className="bg-green-100 text-green-600 border-2 border-gray-300 rounded-full">
+                      {user.name?.charAt(0) || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+                <span className="absolute right-0 top-10 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none hidden md:block">
+                  {user.name} {user.surname}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
+      {/* Mobile navigation overlay */}
+      {isMobileMenuOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/20 md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <nav className="fixed top-16 inset-x-0 z-50 md:hidden border-t bg-white shadow-lg px-4 py-3 space-y-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? "bg-gray-200 text-gray-900"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </>
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {activeTab === "dashboard" && null}
+        {activeTab === "dashboard" && <DashboardSection />}
         {activeTab === "products" && <ProductsSection />}
         {activeTab === "packager" && <PackagerSection />}
-        {activeTab === "reports" && null}
+        {activeTab === "reports" && <ReportsSection />}
         {activeTab === "profile" && <ProfileSection />}
       </main>
     </div>

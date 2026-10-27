@@ -19,7 +19,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Search, Check, X, RefreshCw, Store, Plus, Package } from 'lucide-react';
+import { Search, RefreshCw, Store, Plus, Package, Pencil, Power, PowerOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { BranchShop, Mall } from '@/lib/authTypes';
@@ -46,7 +46,6 @@ export default function PackagerSection() {
   const [dataLoading, setDataLoading] = useState(false);
   const [actioningId, setActioningId] = useState<number | null>(null);
   const [shopId, setShopId] = useState<number>(0);
-  const [rejectingBranch, setRejectingBranch] = useState<BranchShop | null>(null);
 
   const [isAddBranchOpen, setIsAddBranchOpen] = useState(false);
   const [malls, setMalls] = useState<Mall[]>([]);
@@ -58,6 +57,16 @@ export default function PackagerSection() {
     mallId: '',
     imageFile: null as File | null,
     leaseFile: null as File | null,
+  });
+
+  const [editingBranch, setEditingBranch] = useState<BranchShop | null>(null);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    shopName: '',
+    email: '',
+    tellphone: '',
+    mallId: '',
+    imageFile: null as File | null,
   });
 
   useEffect(() => {
@@ -162,45 +171,92 @@ export default function PackagerSection() {
     }
   };
 
-  const handleApprove = async (branch: BranchShop) => {
+  const handleToggleActive = async (branch: BranchShop) => {
     setActioningId(branch.id);
     try {
-      const response = await authAPI.approveBranch(branch.id);
+      const response = branch.active
+        ? await authAPI.deactivateBranch(branch.id)
+        : await authAPI.activateBranch(branch.id);
       if (response.statusCode === 200) {
-        toast.success(`${branch.shopName} approved. Login credentials have been emailed to them.`);
+        toast.success(response.message || (branch.active ? `${branch.shopName} deactivated.` : `${branch.shopName} activated.`));
         await fetchBranches(shopId);
       } else {
-        toast.error(response.message || 'Failed to approve branch.');
+        toast.error(response.message || 'Failed to update branch status.');
       }
     } catch (error: any) {
-      console.error('[PackagerSection] Approve branch error:', error);
-      toast.error(error.message || 'Failed to approve branch.');
+      console.error('[PackagerSection] Toggle branch active error:', error);
+      toast.error(error.message || 'Failed to update branch status.');
     } finally {
       setActioningId(null);
     }
   };
 
-  const handleReject = (branch: BranchShop) => {
-    setRejectingBranch(branch);
+  const openEditBranch = (branch: BranchShop) => {
+    setEditingBranch(branch);
+    setEditForm({
+      shopName: branch.shopName,
+      email: branch.email,
+      tellphone: branch.tellphone,
+      mallId: String(branch.mallId),
+      imageFile: null,
+    });
+    if (malls.length === 0) {
+      authAPI
+        .getMalls()
+        .then(setMalls)
+        .catch((error: any) => {
+          console.error('[PackagerSection] Failed to fetch malls:', error);
+        });
+    }
   };
 
-  const confirmReject = async () => {
-    if (!rejectingBranch) return;
-    setActioningId(rejectingBranch.id);
+  const closeEditBranch = () => {
+    setEditingBranch(null);
+  };
+
+  const handleEditBranch = async () => {
+    if (!editingBranch) return;
+    if (!editForm.shopName.trim()) {
+      toast.error('Please enter a branch name.');
+      return;
+    }
+    if (!editForm.email.trim()) {
+      toast.error('Please enter an email address.');
+      return;
+    }
+    if (!editForm.tellphone.trim()) {
+      toast.error('Please enter a phone number.');
+      return;
+    }
+    if (!editForm.mallId) {
+      toast.error('Please select a mall.');
+      return;
+    }
+
+    setIsSubmittingEdit(true);
     try {
-      const response = await authAPI.rejectBranch(rejectingBranch.id);
+      const formData = new FormData();
+      formData.append('ShopName', editForm.shopName);
+      formData.append('Email', editForm.email);
+      formData.append('Tellphone', editForm.tellphone);
+      formData.append('MallID', editForm.mallId);
+      if (editForm.imageFile) {
+        formData.append('image', editForm.imageFile);
+      }
+
+      const response = await authAPI.editBranch(editingBranch.id, formData);
       if (response.statusCode === 200) {
-        toast.success(`${rejectingBranch.shopName} rejected.`);
-        setRejectingBranch(null);
+        toast.success(response.message || 'Branch updated.');
+        closeEditBranch();
         await fetchBranches(shopId);
       } else {
-        toast.error(response.message || 'Failed to reject branch.');
+        toast.error(response.message || 'Failed to update branch.');
       }
     } catch (error: any) {
-      console.error('[PackagerSection] Reject branch error:', error);
-      toast.error(error.message || 'Failed to reject branch.');
+      console.error('[PackagerSection] Edit branch error:', error);
+      toast.error(error.message || 'Failed to update branch.');
     } finally {
-      setActioningId(null);
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -368,8 +424,9 @@ export default function PackagerSection() {
         </div>
       </div>
       <p className="text-sm text-gray-500">
-        Branches register themselves under your shop, or you can add one directly here. Approve or reject
-        registrations below - approving emails the branch its login credentials.
+        Branches register themselves under your shop, or you can add one directly here. New registrations
+        are reviewed by an admin before going live. Once approved, you can activate/deactivate a branch or
+        edit its details below.
       </p>
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-md">
@@ -425,35 +482,48 @@ export default function PackagerSection() {
                   <TableCell>{branch.email}</TableCell>
                   <TableCell>{branch.tellphone || 'N/A'}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className={statusBadgeClass(branch.regStatus)}>
-                      {branch.regStatus || 'Pending'}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className={statusBadgeClass(branch.regStatus)}>
+                        {branch.regStatus || 'Pending'}
+                      </Badge>
+                      {branch.regStatus === 'Approved' && (
+                        <Badge
+                          variant="secondary"
+                          className={branch.active ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'}
+                        >
+                          {branch.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    {branch.regStatus === 'Approved' || branch.regStatus === 'Rejected' ? (
-                      <span className="text-xs text-gray-400">No action needed</span>
-                    ) : (
-                      <div className="flex gap-1">
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditBranch(branch)}
+                        className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                        title="Edit branch"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {branch.regStatus === 'Approved' && (
                         <Button
                           variant="ghost"
                           size="sm"
                           disabled={actioningId === branch.id}
-                          onClick={() => handleApprove(branch)}
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          onClick={() => handleToggleActive(branch)}
+                          className={
+                            branch.active
+                              ? 'text-red-600 hover:text-red-700 hover:bg-red-50'
+                              : 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                          }
+                          title={branch.active ? 'Deactivate branch' : 'Activate branch'}
                         >
-                          <Check className="h-4 w-4" />
+                          {branch.active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={actioningId === branch.id}
-                          onClick={() => handleReject(branch)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -462,29 +532,103 @@ export default function PackagerSection() {
         </Table>
       </Card>
 
-      <Dialog open={rejectingBranch !== null} onOpenChange={(open) => !open && setRejectingBranch(null)}>
-        <DialogContent className="max-w-sm bg-white">
+      <Dialog open={editingBranch !== null} onOpenChange={(open) => !open && closeEditBranch()}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-white">
           <DialogHeader>
-            <DialogTitle className="text-gray-900">Reject branch registration?</DialogTitle>
+            <DialogTitle className="text-green-700">Edit Branch</DialogTitle>
             <DialogDescription>
-              Reject "{rejectingBranch?.shopName}"'s branch registration? They'll be notified by email.
+              Update "{editingBranch?.shopName}"'s details. Leave the image blank to keep the current one.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRejectingBranch(null)}
-              disabled={actioningId === rejectingBranch?.id}
-              className="border-gray-300 text-gray-700"
-            >
+          <div className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                {editForm.imageFile ? (
+                  <img
+                    src={URL.createObjectURL(editForm.imageFile)}
+                    alt="Preview"
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                ) : editingBranch?.imageBase64 ? (
+                  <img
+                    src={`data:image/jpeg;base64,${editingBranch.imageBase64}`}
+                    alt="Current"
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                ) : (
+                  <Package className="h-8 w-8 text-gray-400" />
+                )}
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="edit-branch-image" className="text-sm">Branch Image</Label>
+                <Input
+                  id="edit-branch-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setEditForm({ ...editForm, imageFile: e.target.files?.[0] || null })}
+                  className="border-gray-300"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-branch-name" className="text-sm">Shop Name *</Label>
+              <Input
+                id="edit-branch-name"
+                value={editForm.shopName}
+                onChange={(e) => setEditForm({ ...editForm, shopName: e.target.value })}
+                className="border-gray-300"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-branch-email" className="text-sm">Email Address *</Label>
+                <Input
+                  id="edit-branch-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="border-gray-300"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-branch-phone" className="text-sm">Tellphone *</Label>
+                <Input
+                  id="edit-branch-phone"
+                  value={editForm.tellphone}
+                  onChange={(e) => setEditForm({ ...editForm, tellphone: e.target.value })}
+                  className="border-gray-300"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-branch-mall" className="text-sm">Mall *</Label>
+              <Select
+                value={editForm.mallId}
+                onValueChange={(value) => setEditForm({ ...editForm, mallId: value })}
+              >
+                <SelectTrigger className="border-gray-300">
+                  <SelectValue placeholder="Select mall" />
+                </SelectTrigger>
+                <SelectContent>
+                  {malls.map((mall) => (
+                    <SelectItem key={mall.mallID} value={String(mall.mallID)}>
+                      {mall.mallName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={closeEditBranch} className="border-gray-300 text-gray-700">
               Cancel
             </Button>
             <Button
-              onClick={confirmReject}
-              disabled={actioningId === rejectingBranch?.id}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={handleEditBranch}
+              disabled={isSubmittingEdit}
             >
-              {actioningId === rejectingBranch?.id ? 'Rejecting...' : 'Reject'}
+              {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

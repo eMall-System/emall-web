@@ -146,6 +146,12 @@ export default function LoginPage() {
         login(response.token, userData);
 
         if (userData.isTempPassword) {
+          try {
+            sessionStorage.setItem("emall_temp_password", loginForm.getValues("password"));
+          } catch {
+            // sessionStorage unavailable (e.g. private mode) - the change-password
+            // form just falls back to asking for the current password manually.
+          }
           toast.info("Please change your temporary password.");
           router.push("/change-password");
         } else {

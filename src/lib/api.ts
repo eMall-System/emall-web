@@ -338,7 +338,40 @@
 
 import axios, { AxiosError } from 'axios';
 import axiosRetry from 'axios-retry';
-import { AuthResponse, RegisterManagerData, Shop, Mall, UserResponse, Product, RetailLoginResponse, RetailProduct, CategoryWithSubs, RetailShopProfile, BranchShop } from './authTypes';
+import {
+  AuthResponse,
+  RegisterManagerData,
+  Shop,
+  Mall,
+  UserResponse,
+  Product,
+  RetailLoginResponse,
+  RetailProduct,
+  CategoryWithSubs,
+  RetailShopProfile,
+  BranchShop,
+  DashboardSummary,
+  SalesTrend,
+  TopProduct,
+  RecentOrder,
+  DashboardAlerts,
+  SalesSummary,
+  RevenueTrend,
+  BestSeller,
+  InventorySummary,
+  StockDistribution,
+  StockHistory,
+  CustomerSummary,
+  CustomerAcquisition,
+  TopCustomer,
+  OrderSummary,
+  OrderStatusBreakdown,
+  FulfillmentTime,
+  FinancialSummary,
+  RevenueExpense,
+  PaymentMethodBreakdown,
+  ReportRange,
+} from './authTypes';
 
 // Friendlier labels for backend field names, used when turning ASP.NET Core's
 // validation errors into readable messages (see extractErrorMessage below).
@@ -800,6 +833,7 @@ export const authAPI = {
         email: b.dto.email,
         tellphone: b.dto.tellphone,
         regStatus: b.dto.regStatus,
+        active: b.dto.active === 1,
         mallId: b.dto.mallID,
         mallName: b.dto.mallName,
         imageBase64: b.image,
@@ -809,27 +843,35 @@ export const authAPI = {
     }
   },
 
-  approveBranch: async (branchId: number): Promise<AuthResponse> => {
+  activateBranch: async (branchId: number): Promise<AuthResponse> => {
     try {
-      const response = await api.put('/api/Authentication/ApproveRetailBranchShop', null, {
-        params: { b: branchId },
-      });
-      console.log('[authAPI.approveBranch] Response:', JSON.stringify(response.data, null, 2));
+      const response = await api.put(`/api/Shop/ActivateBranch/${branchId}`);
+      console.log('[authAPI.activateBranch] Response:', JSON.stringify(response.data, null, 2));
       return response.data;
     } catch (error: unknown) {
-      throw new Error(extractErrorMessage(error, 'Failed to approve branch'));
+      throw new Error(extractErrorMessage(error, 'Failed to activate branch'));
     }
   },
 
-  rejectBranch: async (branchId: number, reason?: string): Promise<AuthResponse> => {
+  deactivateBranch: async (branchId: number): Promise<AuthResponse> => {
     try {
-      const response = await api.put('/api/Authentication/RejectRetailBranchShop', null, {
-        params: { b: branchId, reason },
-      });
-      console.log('[authAPI.rejectBranch] Response:', JSON.stringify(response.data, null, 2));
+      const response = await api.put(`/api/Shop/DeactivateBranch/${branchId}`);
+      console.log('[authAPI.deactivateBranch] Response:', JSON.stringify(response.data, null, 2));
       return response.data;
     } catch (error: unknown) {
-      throw new Error(extractErrorMessage(error, 'Failed to reject branch'));
+      throw new Error(extractErrorMessage(error, 'Failed to deactivate branch'));
+    }
+  },
+
+  editBranch: async (branchId: number, formData: FormData): Promise<AuthResponse> => {
+    try {
+      const response = await api.put(`/api/Shop/EditBranch/${branchId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      console.log('[authAPI.editBranch] Response:', JSON.stringify(response.data, null, 2));
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to update branch'));
     }
   },
 
@@ -1060,6 +1102,207 @@ export const authAPI = {
         throw new Error(error.response.data.message || 'Failed to upload product');
       }
       throw new Error('An unexpected error occurred');
+    }
+  },
+
+  // ---------------- Dashboard ----------------
+
+  getDashboardSummary: async (shopId: number): Promise<DashboardSummary> => {
+    try {
+      const response = await api.get(`/api/dashboard/summary/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch dashboard summary'));
+    }
+  },
+
+  getWeeklySales: async (shopId: number): Promise<SalesTrend[]> => {
+    try {
+      const response = await api.get(`/api/dashboard/weekly-sales/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch weekly sales'));
+    }
+  },
+
+  getDashboardTopProducts: async (shopId: number): Promise<TopProduct[]> => {
+    try {
+      const response = await api.get(`/api/dashboard/top-products/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch top products'));
+    }
+  },
+
+  getRecentOrders: async (shopId: number): Promise<RecentOrder[]> => {
+    try {
+      const response = await api.get(`/api/dashboard/recent-orders/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch recent orders'));
+    }
+  },
+
+  getDashboardAlerts: async (shopId: number): Promise<DashboardAlerts> => {
+    try {
+      const response = await api.get(`/api/dashboard/alerts/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch alerts'));
+    }
+  },
+
+  // ---------------- Reports: Sales ----------------
+
+  getSalesSummary: async (shopId: number, range: ReportRange = 'thisMonth'): Promise<SalesSummary> => {
+    try {
+      const response = await api.get(`/api/reports/sales/summary/${shopId}`, { params: { range } });
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch sales summary'));
+    }
+  },
+
+  getRevenueTrend: async (shopId: number, range: ReportRange = 'thisMonth'): Promise<RevenueTrend[]> => {
+    try {
+      const response = await api.get(`/api/reports/sales/trend/${shopId}`, { params: { range } });
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch revenue trend'));
+    }
+  },
+
+  getTopProductsByRevenue: async (shopId: number, range: ReportRange = 'thisMonth'): Promise<TopProduct[]> => {
+    try {
+      const response = await api.get(`/api/reports/sales/top-products/${shopId}`, { params: { range } });
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch top products by revenue'));
+    }
+  },
+
+  getBestSellers: async (shopId: number, range: ReportRange = 'thisMonth'): Promise<BestSeller[]> => {
+    try {
+      const response = await api.get(`/api/reports/sales/best-sellers/${shopId}`, { params: { range } });
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch best sellers'));
+    }
+  },
+
+  // ---------------- Reports: Inventory ----------------
+
+  getInventorySummary: async (shopId: number): Promise<InventorySummary> => {
+    try {
+      const response = await api.get(`/api/reports/inventory/summary/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch inventory summary'));
+    }
+  },
+
+  getStockDistribution: async (shopId: number): Promise<StockDistribution> => {
+    try {
+      const response = await api.get(`/api/reports/inventory/distribution/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch stock distribution'));
+    }
+  },
+
+  getStockHistory: async (shopId: number): Promise<StockHistory[]> => {
+    try {
+      const response = await api.get(`/api/reports/inventory/history/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch stock history'));
+    }
+  },
+
+  // ---------------- Reports: Customers ----------------
+
+  getCustomerSummary: async (shopId: number): Promise<CustomerSummary> => {
+    try {
+      const response = await api.get(`/api/reports/customers/summary/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch customer summary'));
+    }
+  },
+
+  getCustomerAcquisitionTrend: async (shopId: number): Promise<CustomerAcquisition[]> => {
+    try {
+      const response = await api.get(`/api/reports/customers/acquisition/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch customer acquisition trend'));
+    }
+  },
+
+  getTopCustomers: async (shopId: number): Promise<TopCustomer[]> => {
+    try {
+      const response = await api.get(`/api/reports/customers/top/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch top customers'));
+    }
+  },
+
+  // ---------------- Reports: Orders ----------------
+
+  getOrderSummary: async (shopId: number): Promise<OrderSummary> => {
+    try {
+      const response = await api.get(`/api/reports/orders/summary/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch order summary'));
+    }
+  },
+
+  getOrderStatusBreakdown: async (shopId: number): Promise<OrderStatusBreakdown> => {
+    try {
+      const response = await api.get(`/api/reports/orders/status-breakdown/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch order status breakdown'));
+    }
+  },
+
+  getFulfillmentTime: async (shopId: number): Promise<FulfillmentTime[]> => {
+    try {
+      const response = await api.get(`/api/reports/orders/fulfillment-time/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch fulfillment time'));
+    }
+  },
+
+  // ---------------- Reports: Financial ----------------
+
+  getFinancialSummary: async (shopId: number): Promise<FinancialSummary> => {
+    try {
+      const response = await api.get(`/api/reports/financial/summary/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch financial summary'));
+    }
+  },
+
+  getRevenueVsExpenses: async (shopId: number): Promise<RevenueExpense[]> => {
+    try {
+      const response = await api.get(`/api/reports/financial/revenue-expenses/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch revenue vs expenses'));
+    }
+  },
+
+  getPaymentMethodBreakdown: async (shopId: number): Promise<PaymentMethodBreakdown[]> => {
+    try {
+      const response = await api.get(`/api/reports/financial/payment-methods/${shopId}`);
+      return response.data;
+    } catch (error: unknown) {
+      throw new Error(extractErrorMessage(error, 'Failed to fetch payment method breakdown'));
     }
   },
 };

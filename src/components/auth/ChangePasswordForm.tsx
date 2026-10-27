@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -12,24 +12,46 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-const changePasswordSchema = z.object({
-  email: z.string().min(1, 'Username is required'),
-  currPass: z.string().min(1, 'Current password is required'),
-  newPass: z
-    .string()
-    .min(8, 'New password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-      'Password must include uppercase, lowercase, number, and special character',
-    ),
-});
+const changePasswordSchema = z
+  .object({
+    email: z.string().min(1, 'Username is required'),
+    currPass: z.string().optional(),
+    newPass: z
+      .string()
+      .min(8, 'New password must be at least 8 characters')
+      .regex(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+        'Password must include uppercase, lowercase, number, and special character',
+      ),
+    confirmPass: z.string().min(1, 'Please confirm your new password'),
+  })
+  .refine((data) => data.newPass === data.confirmPass, {
+    message: 'Passwords do not match',
+    path: ['confirmPass'],
+  });
 
 type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 
 export default function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
   const [showCurrPass, setShowCurrPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  // Set when arriving straight from logging in with a temp password - the user
+  // just typed it, so this form skips asking them to retype it.
+  const [knownCurrentPassword, setKnownCurrentPassword] = useState<string | null>(null);
   const { user, token, login } = useAuth();
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('emall_temp_password');
+      if (stored) {
+        setKnownCurrentPassword(stored);
+        sessionStorage.removeItem('emall_temp_password');
+      }
+    } catch {
+      // sessionStorage unavailable - just falls back to asking for the current password.
+    }
+  }, []);
 
   const form = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
@@ -37,12 +59,19 @@ export default function ChangePasswordForm({ onSuccess }: { onSuccess?: () => vo
       email: user?.email || '',
       currPass: '',
       newPass: '',
+      confirmPass: '',
     },
   });
 
   const handleChangePassword = async (data: ChangePasswordFormData) => {
+    const currPass = knownCurrentPassword || data.currPass || '';
+    if (!currPass) {
+      toast.error('Current password is required');
+      return;
+    }
+
     try {
-      const response = await authAPI.changeRetailPassword(data.email, data.currPass, data.newPass);
+      const response = await authAPI.changeRetailPassword(data.email, currPass, data.newPass);
 
       if (response.statusCode === 200) {
         toast.success('Password updated successfully.');
@@ -51,7 +80,7 @@ export default function ChangePasswordForm({ onSuccess }: { onSuccess?: () => vo
           login(token, { ...user, isTempPassword: false });
         }
 
-        form.reset({ email: data.email, currPass: '', newPass: '' });
+        form.reset({ email: data.email, currPass: '', newPass: '', confirmPass: '' });
         onSuccess?.();
       } else {
         toast.error(response.message || 'Failed to update password.');
@@ -81,33 +110,35 @@ export default function ChangePasswordForm({ onSuccess }: { onSuccess?: () => vo
           )}
         </div>
       </div>
-      <div>
-        <Label htmlFor="currPass">Current Password</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            id="currPass"
-            type={showCurrPass ? 'text' : 'password'}
-            placeholder="Enter current password"
-            className="pl-10 pr-10"
-            {...form.register('currPass')}
-            aria-invalid={!!form.formState.errors.currPass}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-0 top-0 h-full px-3"
-            onClick={() => setShowCurrPass(!showCurrPass)}
-            aria-label={showCurrPass ? 'Hide password' : 'Show password'}
-          >
-            {showCurrPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </Button>
+      {!knownCurrentPassword && (
+        <div>
+          <Label htmlFor="currPass">Current Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              id="currPass"
+              type={showCurrPass ? 'text' : 'password'}
+              placeholder="Enter current password"
+              className="pl-10 pr-10"
+              {...form.register('currPass')}
+              aria-invalid={!!form.formState.errors.currPass}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-full px-3"
+              onClick={() => setShowCurrPass(!showCurrPass)}
+              aria-label={showCurrPass ? 'Hide password' : 'Show password'}
+            >
+              {showCurrPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
+          {form.formState.errors.currPass && (
+            <p className="text-red-500 text-xs mt-1">{form.formState.errors.currPass.message}</p>
+          )}
         </div>
-        {form.formState.errors.currPass && (
-          <p className="text-red-500 text-xs mt-1">{form.formState.errors.currPass.message}</p>
-        )}
-      </div>
+      )}
       <div>
         <Label htmlFor="newPass">New Password</Label>
         <div className="relative">
@@ -133,6 +164,33 @@ export default function ChangePasswordForm({ onSuccess }: { onSuccess?: () => vo
         </div>
         {form.formState.errors.newPass && (
           <p className="text-red-500 text-xs mt-1">{form.formState.errors.newPass.message}</p>
+        )}
+      </div>
+      <div>
+        <Label htmlFor="confirmPass">Confirm New Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            id="confirmPass"
+            type={showConfirmPass ? 'text' : 'password'}
+            placeholder="Re-enter new password"
+            className="pl-10 pr-10"
+            {...form.register('confirmPass')}
+            aria-invalid={!!form.formState.errors.confirmPass}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-0 top-0 h-full px-3"
+            onClick={() => setShowConfirmPass(!showConfirmPass)}
+            aria-label={showConfirmPass ? 'Hide password' : 'Show password'}
+          >
+            {showConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
+        {form.formState.errors.confirmPass && (
+          <p className="text-red-500 text-xs mt-1">{form.formState.errors.confirmPass.message}</p>
         )}
       </div>
       <Button

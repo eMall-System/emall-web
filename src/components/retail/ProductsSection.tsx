@@ -54,6 +54,10 @@ export default function ProductsSection() {
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [categoryQuery, setCategoryQuery] = useState('');
   const categoryMenuRef = useRef<HTMLDivElement>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState('All subcategories');
+  const [isSubcategoryMenuOpen, setIsSubcategoryMenuOpen] = useState(false);
+  const [subcategoryQuery, setSubcategoryQuery] = useState('');
+  const subcategoryMenuRef = useRef<HTMLDivElement>(null);
   const [isProductFormOpen, setIsProductFormOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -223,6 +227,17 @@ export default function ProductsSection() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isCategoryMenuOpen]);
+
+  useEffect(() => {
+    if (!isSubcategoryMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (subcategoryMenuRef.current && !subcategoryMenuRef.current.contains(e.target as Node)) {
+        setIsSubcategoryMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isSubcategoryMenuOpen]);
 
   const fetchProducts = async (rShopId: number) => {
     setIsFetching(true);
@@ -455,10 +470,29 @@ export default function ProductsSection() {
     ...Array.from(new Set(products.map((p) => p.prod_Categ))).filter(Boolean),
   ];
 
+  const subcategories =
+    selectedCategory === 'All products'
+      ? []
+      : [
+          'All subcategories',
+          ...Array.from(
+            new Set(products.filter((p) => p.prod_Categ === selectedCategory).map((p) => p.prod_Subcateg))
+          ).filter(Boolean),
+        ];
+
+  const handleSelectCategory = (category: string) => {
+    setSelectedCategory(category);
+    setSelectedSubcategory('All subcategories');
+    setIsCategoryMenuOpen(false);
+    setCategoryQuery('');
+  };
+
   const filteredProducts = products.filter((product) => {
     const matchesSearch = product.prod_Name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'All products' || product.prod_Categ === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesSubcategory =
+      selectedSubcategory === 'All subcategories' || product.prod_Subcateg === selectedSubcategory;
+    return matchesSearch && matchesCategory && matchesSubcategory;
   });
 
   const newProductPrice = parseFloat(newProduct.price) || 0;
@@ -850,55 +884,108 @@ export default function ProductsSection() {
           </div>
         </div>
 
-        {/* Category Filter */}
-        <div className="relative w-full sm:w-72" ref={categoryMenuRef}>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsCategoryMenuOpen((open) => !open)}
-            className="w-full justify-between border-gray-300 bg-white text-gray-700 font-normal shadow-sm"
-          >
-            <span className="truncate">{selectedCategory}</span>
-            <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
-          </Button>
-          {isCategoryMenuOpen && (
-            <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
-              <div className="relative p-2 border-b border-gray-100">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  autoFocus
-                  placeholder="Search categories..."
-                  value={categoryQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCategoryQuery(e.target.value)}
-                  className="pl-8 h-9 border-gray-300"
-                />
+        {/* Category / Subcategory Filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="relative w-full sm:w-72" ref={categoryMenuRef}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsCategoryMenuOpen((open) => !open)}
+              className="w-full justify-between border-gray-300 bg-white text-gray-700 font-normal shadow-sm"
+            >
+              <span className="truncate">{selectedCategory}</span>
+              <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+            </Button>
+            {isCategoryMenuOpen && (
+              <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div className="relative p-2 border-b border-gray-100">
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    autoFocus
+                    placeholder="Search categories..."
+                    value={categoryQuery}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCategoryQuery(e.target.value)}
+                    className="pl-8 h-9 border-gray-300"
+                  />
+                </div>
+                <div className="max-h-60 overflow-y-auto py-1">
+                  {categories.filter((c) => c.toLowerCase().includes(categoryQuery.toLowerCase())).length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-gray-500">No matching categories.</p>
+                  ) : (
+                    categories
+                      .filter((c) => c.toLowerCase().includes(categoryQuery.toLowerCase()))
+                      .map((category) => (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => handleSelectCategory(category)}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            selectedCategory === category
+                              ? 'bg-green-50 text-green-700 font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {category}
+                        </button>
+                      ))
+                  )}
+                </div>
               </div>
-              <div className="max-h-60 overflow-y-auto py-1">
-                {categories.filter((c) => c.toLowerCase().includes(categoryQuery.toLowerCase())).length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-gray-500">No matching categories.</p>
-                ) : (
-                  categories
-                    .filter((c) => c.toLowerCase().includes(categoryQuery.toLowerCase()))
-                    .map((category) => (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() => {
-                          setSelectedCategory(category);
-                          setIsCategoryMenuOpen(false);
-                          setCategoryQuery('');
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                          selectedCategory === category
-                            ? 'bg-green-50 text-green-700 font-medium'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        {category}
-                      </button>
-                    ))
-                )}
-              </div>
+            )}
+          </div>
+
+          {/* Subcategory Filter - only once a specific category is picked */}
+          {selectedCategory !== 'All products' && subcategories.length > 1 && (
+            <div className="relative w-full sm:w-72" ref={subcategoryMenuRef}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSubcategoryMenuOpen((open) => !open)}
+                className="w-full justify-between border-gray-300 bg-white text-gray-700 font-normal shadow-sm"
+              >
+                <span className="truncate">{selectedSubcategory}</span>
+                <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+              </Button>
+              {isSubcategoryMenuOpen && (
+                <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                  <div className="relative p-2 border-b border-gray-100">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      autoFocus
+                      placeholder="Search subcategories..."
+                      value={subcategoryQuery}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubcategoryQuery(e.target.value)}
+                      className="pl-8 h-9 border-gray-300"
+                    />
+                  </div>
+                  <div className="max-h-60 overflow-y-auto py-1">
+                    {subcategories.filter((c) => c.toLowerCase().includes(subcategoryQuery.toLowerCase())).length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-gray-500">No matching subcategories.</p>
+                    ) : (
+                      subcategories
+                        .filter((c) => c.toLowerCase().includes(subcategoryQuery.toLowerCase()))
+                        .map((subcategory) => (
+                          <button
+                            key={subcategory}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSubcategory(subcategory);
+                              setIsSubcategoryMenuOpen(false);
+                              setSubcategoryQuery('');
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                              selectedSubcategory === subcategory
+                                ? 'bg-green-50 text-green-700 font-medium'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {subcategory}
+                          </button>
+                        ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
